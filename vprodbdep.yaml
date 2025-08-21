@@ -1,3 +1,31 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vprodb-pv
+spec:
+  capacity:
+    storage: 3Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: ebs.csi.aws.com
+    volumeHandle: vol-0f650808478b5d76d
+    fsType: ext4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vprodb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 3Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,28 +42,26 @@ spec:
       labels:
         app: vprodb
     spec:
+      nodeSelector:
+        topology.kubernetes.io/zone: us-east-2a
       containers:
         - name: vprodb
           image: piyush1337/vprofiledb:v1
           args:
             - "--ignore-db-dir=lost+found"
           ports:
-            - name: vprodb-port
-              containerPort: 3306
+            - containerPort: 3306
+              name: vprodb-port
+          volumeMounts:
+            - mountPath: /var/lib/mysql
+              name: vpro-db-data
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: db-pass
-          volumeMounts:
-            - mountPath: /var/lib/mysql
-              name: vpro-db-data
-      nodeSelector:
-        topology.kubernetes.io/zone: us-east-2a
       volumes:
         - name: vpro-db-data
-          csi:
-            driver: ebs.csi.aws.com
-            volumeHandle: vol-0f650808478b5d76d
-            fsType: ext4
+          persistentVolumeClaim:
+            claimName: vprodb-pvc
